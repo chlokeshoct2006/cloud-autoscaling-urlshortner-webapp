@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloud URL Shortener with Kubernetes Autoscaling</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔗 Cloud URL Shortener</h1>
+      <p class="tagline">Production-Grade • Kubernetes HPA • Prometheus Monitoring</p>
+    </div>
+
+    <div class="card">
+      <div class="input-group">
+        <input id="urlInput" type="url" placeholder="Paste your long URL here (e.g. https://github.com)..." />
+        <button id="shortenBtn" onclick="shorten()">Shorten URL</button>
+      </div>
+
+      <div id="result" class="result hidden"></div>
+    </div>
+
+    <div class="card hpa-tester">
+      <h3>⚡ HPA Autoscaling Load Simulator</h3>
+      <p>Trigger CPU spikes to watch Kubernetes Horizontal Pod Autoscaler spin up new pods in real time!</p>
+      <div class="button-row">
+        <button class="secondary-btn" onclick="generateLoad(1)">Fire 1 Load Request</button>
+        <button class="warning-btn" onclick="generateLoad(20)">Simulate High Traffic (20 reqs)</button>
+      </div>
+      <div id="loadStatus" class="load-status"></div>
+    </div>
+
+    <div class="card-footer-links">
+      <a href="/stats/all" target="_blank">📊 View URL Stats</a>
+      <span>•</span>
+      <a href="/metrics" target="_blank">📈 Prometheus /metrics</a>
+      <span>•</span>
+      <a href="/health" target="_blank">🩺 Health Check</a>
+    </div>
+  </div>
+
+  <footer>
+    Running on Kubernetes • Auto-Scaled with HPA • Monitored with Prometheus &amp; Grafana
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
