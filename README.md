@@ -1,5 +1,11 @@
 # 🚀 Cloud-Native URL Shortener with Kubernetes Autoscaling & DevSecOps
 
+[![DevSecOps CI/CD Pipeline](https://github.com/chlokeshoct2006/cloud-autoscaling-urlshortner-webapp/actions/workflows/ci-cd.yaml/badge.svg)](https://github.com/chlokeshoct2006/cloud-autoscaling-urlshortner-webapp/actions/workflows/ci-cd.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-blue.svg)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-HPA%20Enabled-326ce5.svg)](https://kubernetes.io/)
+[![Trivy](https://img.shields.io/badge/Security-Trivy%20Scanned-green.svg)](https://trivy.dev/)
+
 A production-grade, cloud-native URL Shortener application demonstrating modern DevOps and Cloud architecture:
 
 - ⚡ **Kubernetes Horizontal Pod Autoscaler (HPA)** for dynamic replica scaling based on CPU utilization
