@@ -2,6 +2,7 @@ const express = require("express");
 const os = require("os");
 const crypto = require("crypto");
 const client = require("prom-client");
+const Redis = require("ioredis");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,11 +42,93 @@ app.use((req, res, next) => {
   next();
 });
 
-const urlStore = {};
+// Redis Configuration with graceful in-memory fallback
+let redis = null;
+let useRedis = false;
+const inMemoryStore = {};
+
+const REDIS_HOST = process.env.REDIS_HOST || null;
+const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379", 10);
+
+if (REDIS_HOST) {
+  try {
+    redis = new Redis({
+      host: REDIS_HOST,
+      port: REDIS_PORT,
+      retryStrategy(times) {
+        if (times > 3) return null;
+        return Math.min(times * 200, 1000);
+      },
+      lazyConnect: true
+    });
+
+    redis.connect().then(() => {
+      useRedis = true;
+      console.log(`Connected to Redis at ${REDIS_HOST}:${REDIS_PORT}`);
+    }).catch((err) => {
+      console.warn(`Redis connection failed (${err.message}). Using in-memory fallback.`);
+      useRedis = false;
+    });
+
+    redis.on("error", () => { useRedis = false; });
+    redis.on("ready", () => { useRedis = true; });
+  } catch (err) {
+    console.warn(`Redis initialization failed (${err.message}). Falling back to memory.`);
+  }
+}
+
+// Data Access Layer (Stateless across pods when Redis is enabled)
+async function saveUrl(code, data) {
+  if (useRedis && redis) {
+    await redis.set(`url:${code}`, JSON.stringify(data));
+  } else {
+    inMemoryStore[code] = data;
+  }
+}
+
+async function getUrl(code) {
+  if (useRedis && redis) {
+    const raw = await redis.get(`url:${code}`);
+    return raw ? JSON.parse(raw) : null;
+  }
+  return inMemoryStore[code] || null;
+}
+
+async function incrementClicks(code, entry) {
+  entry.clicks = (entry.clicks || 0) + 1;
+  if (useRedis && redis) {
+    await redis.set(`url:${code}`, JSON.stringify(entry));
+  } else {
+    inMemoryStore[code] = entry;
+  }
+  return entry;
+}
+
+async function getAllUrls() {
+  if (useRedis && redis) {
+    try {
+      const keys = await redis.keys("url:*");
+      const result = {};
+      for (const key of keys) {
+        const code = key.replace("url:", "");
+        const val = await redis.get(key);
+        if (val) result[code] = JSON.parse(val);
+      }
+      return result;
+    } catch {
+      return inMemoryStore;
+    }
+  }
+  return inMemoryStore;
+}
 
 // Health check endpoint (for K8s liveness & readiness probes)
 app.get("/health", (req, res) => {
-  res.status(200).send("UP");
+  res.status(200).json({
+    status: "UP",
+    pod: os.hostname(),
+    storage: useRedis ? "Redis" : "In-Memory"
+  });
 });
 
 // Prometheus metrics scrape endpoint
@@ -59,38 +142,49 @@ app.get("/metrics", async (req, res) => {
 });
 
 // API: shorten URL
-app.post("/shorten", (req, res) => {
+app.post("/shorten", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "URL required" });
 
   const code = crypto.randomBytes(3).toString("hex");
-  urlStore[code] = { url, clicks: 0, createdAt: new Date().toISOString() };
+  const data = {
+    url,
+    clicks: 0,
+    createdAt: new Date().toISOString(),
+    createdOnPod: os.hostname()
+  };
+
+  await saveUrl(code, data);
   shortenCounter.inc();
 
   res.json({
     shortUrl: `/${code}`,
     fullShortUrl: `${req.protocol}://${req.get("host")}/${code}`,
     code: code,
+    storage: useRedis ? "Redis" : "In-Memory",
     pod: os.hostname()
   });
 });
 
 // Redirect
-app.get("/:code", (req, res) => {
-  const entry = urlStore[req.params.code];
+app.get("/:code", async (req, res) => {
+  const code = req.params.code;
+  const entry = await getUrl(code);
   if (!entry) return res.status(404).send("Not found");
 
-  entry.clicks++;
+  await incrementClicks(code, entry);
   redirectCounter.inc();
   res.redirect(entry.url);
 });
 
 // Stats
-app.get("/stats/all", (req, res) => {
+app.get("/stats/all", async (req, res) => {
+  const urls = await getAllUrls();
   res.json({
     pod: os.hostname(),
-    totalUrls: Object.keys(urlStore).length,
-    urls: urlStore
+    storage: useRedis ? "Redis" : "In-Memory",
+    totalUrls: Object.keys(urls).length,
+    urls: urls
   });
 });
 
@@ -104,5 +198,5 @@ app.get("/load", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} (pod: ${os.hostname()})`);
+  console.log(`Server running on port ${PORT} (pod: ${os.hostname()}, storage: ${useRedis ? "Redis" : "In-Memory"})`);
 });

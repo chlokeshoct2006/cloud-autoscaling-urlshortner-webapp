@@ -22,6 +22,12 @@ spec:
         - containerPort: 3000
           name: http
 
+        env:
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+
         livenessProbe:
           httpGet:
             path: /health
